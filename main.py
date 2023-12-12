@@ -37,10 +37,6 @@ RIGHT_PUPIL_POINT = 473
 RIGHT_IRIS = [474, 475, 476, 477]
 RIGHT_KEY_POINTS = [33, 133, 9, 8] #lewo, prawo, góra, dół
 
-map_face_mesh = mp.solutions.face_mesh
-# camera object
-camera = cv.VideoCapture(0)
-
 
 # landmark detection function
 def landmarksDetection(img, results, draw=False):
@@ -199,7 +195,12 @@ def pixelCounter(first_piece, second_piece, third_piece):
     return pos_eye, color
 
 
-with (map_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confidence=0.5, refine_landmarks=True) as face_mesh):
+# camera object
+camera = cv.VideoCapture(1)
+mp_face_detection = mp.solutions.face_detection
+mp_face_mesh = mp.solutions.face_mesh
+with (mp_face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.5) as face_detection,
+      mp_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confidence=0.5, refine_landmarks=True) as face_mesh):
     # starting time here
     start_time = time.time()
     # starting Video loop here.
@@ -207,6 +208,7 @@ with (map_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confiden
     is_calibrated = False
     left_eye_calibration = []
     right_eye_calibration = []
+
     quit_condition = False
     while not quit_condition:
         frame_counter += 1  # frame counter
@@ -215,20 +217,25 @@ with (map_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confiden
             break  # no more frames break
         #  resizing frame
         frame = cv.flip(frameBeforeFlip, 1)   #odwrocilem kamere bo jest przejrzysciej i spowodowalem komplikacje, juz opanowane
-        frame = cv.resize(frame, None, fx=1.5, fy=1.5, interpolation=cv.INTER_CUBIC)
+        # frame = cv.resize(frame, None, fx=1.5, fy=1.5, interpolation=cv.INTER_CUBIC)
         frame_height, frame_width = frame.shape[:2]
         rgb_frame = cv.cvtColor(frame, cv.COLOR_RGB2BGR)
 
-        # mp_face_detection = mp.solutions.face_detection
-        # face_detection = mp_face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.5)
-        # results = face_detection.process(rgb_frame)
-        # if results.detections:
-        #     frame_height, frame_width = frame.shape[:2]
-        #     test = results.detections
-        #     bounding_box = results.detections[0].location_data.relative_bounding_box
-        #     frame = frame[int(bounding_box.xmin * frame_width):int((bounding_box.xmin+bounding_box.width) * frame_width),
-        #             int(bounding_box.ymin * frame_height):int((bounding_box.ymin + bounding_box.height) * frame_height)]
-        #     frame = cv.resize(frame, None, fx=2, fy=2, interpolation=cv.INTER_CUBIC)
+        results = face_detection.process(rgb_frame)
+        if results.detections:
+            frame_height, frame_width = frame.shape[:2]
+            test = results.detections
+            bounding_box = results.detections[0].location_data.relative_bounding_box
+            y_center = int(((2 * bounding_box.ymin + bounding_box.height) / 2) * frame_height)
+            x_center = int(((2 * bounding_box.xmin + bounding_box.width) / 2) * frame_width)
+            y_offset = int(frame_height / 4) #tutaj wartość można zmieniać
+            x_offset = int(frame_width / 4)
+            # mp.solutions.drawing_utils.draw_detection(frame, results.detections[0])
+            frame = frame[np.max([y_center-y_offset, 0]):y_center+y_offset,
+                          np.max([x_center-x_offset, 0]):x_center+x_offset]
+            frame = cv.resize(frame, (frame_width, frame_height), interpolation=cv.INTER_CUBIC)
+            print((y_center, x_center), (np.max([y_center-y_offset, 0]), y_center+y_offset), (np.max([x_center-x_offset, 0]), x_center+x_offset))
+            rgb_frame = cv.cvtColor(frame, cv.COLOR_RGB2BGR)
 
         results = face_mesh.process(rgb_frame)
         if results.multi_face_landmarks:
@@ -288,7 +295,7 @@ with (map_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confiden
             #                           np.mean([mesh_coords[p] for p in [23,230]], axis=0)], dtype=np.int16)
             # left_mean_coords = np.asarray([np.mean([mesh_coords[p] for p in [443, 257]], axis=0),
             #                               np.mean([mesh_coords[p] for p in [253, 450]], axis=0)], dtype=np.int16)
-            right_mean_coords = np.asarray([np.mean([mesh_coords[p] for p in [2,94]], axis=0),
+            right_mean_coords = np.asarray([np.mean([mesh_coords[p] for p in [2, 94]], axis=0),
                                            np.mean([mesh_coords[p] for p in [168, 6]], axis=0)], dtype=np.int16)
             left_mean_coords = right_mean_coords
 
@@ -364,10 +371,10 @@ with (map_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confiden
                 left_distance = distanceRatio(left_mean_coords[0][1], left_pupil_coords[1],
                                               left_mean_coords[0][1],
                                               left_mean_coords[1][1])
-                if left_distance <= left_eye_calibration[2]:
+                if left_distance >= left_eye_calibration[2]:
                     eye_position = 'UP'
                     color = [utils.GRAY, utils.YELLOW]
-                elif left_distance >= left_eye_calibration[3]:
+                elif left_distance <= left_eye_calibration[3]:
                     eye_position = "DOWN"
                     color = [utils.BLACK, utils.GREEN]
                 else:
@@ -382,6 +389,8 @@ with (map_face_mesh.FaceMesh(min_detection_confidence=0.5, min_tracking_confiden
         frame = utils.textWithBackground(frame, f'FPS: {round(fps, 1)}', FONTS, 1.0, (30, 50), bgOpacity=0.9,
                                          textThickness=2)
         frame = utils.textWithBackground(frame, f'cnt: {calibration_cnt}', FONTS, 1.0, (200, 50), bgOpacity=0.9,
+                                         textThickness=2)
+        frame = utils.textWithBackground(frame, f'cnt: {frame.shape}', FONTS, 1.0, (300, 50), bgOpacity=0.9,
                                          textThickness=2)
 
         # writing image for thumbnail drawing shape
