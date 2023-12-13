@@ -51,16 +51,23 @@ def landmarksDetection(img, results, draw=False):
     return mesh_coord
 
 
-# Euclaidean distance
-def euclaideanDistance(point, point1):
-    x, y = point
-    x1, y1 = point1
+# Euclidean distance
+def euclideanDistance(point, point1):
+    x, y = point[:2]
+    x1, y1 = point1[:2]
     distance = math.sqrt((x1 - x) ** 2 + (y1 - y) ** 2)
     return distance
 
-# Distance ratio of x1->x2 length to x3->x4 length
-def distanceRatio(x1, x2, x3, x4):
-    return (np.abs(x1 - x2) * 1.0) / np.abs(x3 - x4)
+# Distance ratio of point1->point22 euclidean distance
+# to point3->point4 distance
+def distanceRatio(point1, point2, point3, point4):
+    temp1 = np.subtract(point1, point2)
+    temp2 = np.subtract(point3, point4)
+    d1 = np.sqrt(np.dot(np.transpose(temp1), temp1))
+    d2 = np.sqrt(np.dot(np.transpose(temp2), temp2))
+    if d2 == 0:
+        d2 = 0.001
+    return d1 / d2
 
 # Blinking Ratio
 def blinkRatio(img, landmarks, right_indices, left_indices):
@@ -84,11 +91,11 @@ def blinkRatio(img, landmarks, right_indices, left_indices):
     lv_top = landmarks[left_indices[12]]
     lv_bottom = landmarks[left_indices[4]]
 
-    rhDistance = euclaideanDistance(rh_right, rh_left)
-    rvDistance = euclaideanDistance(rv_top, rv_bottom)
+    rhDistance = euclideanDistance(rh_right, rh_left)
+    rvDistance = euclideanDistance(rv_top, rv_bottom)
 
-    lvDistance = euclaideanDistance(lv_top, lv_bottom)
-    lhDistance = euclaideanDistance(lh_right, lh_left)
+    lvDistance = euclideanDistance(lv_top, lv_bottom)
+    lhDistance = euclideanDistance(lh_right, lh_left)
 
     reRatio = rhDistance / rvDistance
     leRatio = lhDistance / lvDistance
@@ -215,9 +222,10 @@ with (mp_face_detection.FaceDetection(model_selection=1, min_detection_confidenc
         ret, frameBeforeFlip = camera.read()  # getting frame from camera
         if not ret:
             break  # no more frames break
+
         #  resizing frame
         frame = cv.flip(frameBeforeFlip, 1)   #odwrocilem kamere bo jest przejrzysciej i spowodowalem komplikacje, juz opanowane
-        # frame = cv.resize(frame, None, fx=1.5, fy=1.5, interpolation=cv.INTER_CUBIC)
+        frame = cv.resize(frame, None, fx=1.5, fy=1.5, interpolation=cv.INTER_CUBIC)
         frame_height, frame_width = frame.shape[:2]
         rgb_frame = cv.cvtColor(frame, cv.COLOR_RGB2BGR)
 
@@ -231,10 +239,15 @@ with (mp_face_detection.FaceDetection(model_selection=1, min_detection_confidenc
             y_offset = int(frame_height / 4) #tutaj wartość można zmieniać
             x_offset = int(frame_width / 4)
             # mp.solutions.drawing_utils.draw_detection(frame, results.detections[0])
-            frame = frame[np.max([y_center-y_offset, 0]):y_center+y_offset,
-                          np.max([x_center-x_offset, 0]):x_center+x_offset]
+            diff = y_center-y_offset
+            if diff < 0:
+                y_center -= diff
+            diff = x_center - x_offset
+            if diff < 0:
+                x_center -= diff
+            frame = frame[y_center-y_offset:y_center+y_offset,
+                          x_center-x_offset:x_center+x_offset]
             frame = cv.resize(frame, (frame_width, frame_height), interpolation=cv.INTER_CUBIC)
-            print((y_center, x_center), (np.max([y_center-y_offset, 0]), y_center+y_offset), (np.max([x_center-x_offset, 0]), x_center+x_offset))
             rgb_frame = cv.cvtColor(frame, cv.COLOR_RGB2BGR)
 
         results = face_mesh.process(rgb_frame)
@@ -268,12 +281,13 @@ with (mp_face_detection.FaceDetection(model_selection=1, min_detection_confidenc
 
             right_iris_coords = [mesh_coords[p] for p in LEFT_IRIS]
             left_iris_coords = [mesh_coords[p] for p in RIGHT_IRIS]
-            right_pupil_coords = mesh_coords[LEFT_PUPIL_POINT]
-            left_pupil_coords = mesh_coords[RIGHT_PUPIL_POINT]
             cv.polylines(frame, [np.array(right_iris_coords,dtype=np.int32)], True, utils.GREEN, 1,
                          cv.LINE_AA)
             cv.polylines(frame, [np.array(left_iris_coords, dtype=np.int32)], True, utils.GREEN, 1,
                          cv.LINE_AA)
+
+            right_pupil_coords = mesh_coords[LEFT_PUPIL_POINT]
+            left_pupil_coords = mesh_coords[RIGHT_PUPIL_POINT]
             cv.circle(frame, right_pupil_coords, 1, utils.GREEN)
             cv.circle(frame, left_pupil_coords, 1, utils.GREEN)
 
@@ -295,10 +309,10 @@ with (mp_face_detection.FaceDetection(model_selection=1, min_detection_confidenc
             #                           np.mean([mesh_coords[p] for p in [23,230]], axis=0)], dtype=np.int16)
             # left_mean_coords = np.asarray([np.mean([mesh_coords[p] for p in [443, 257]], axis=0),
             #                               np.mean([mesh_coords[p] for p in [253, 450]], axis=0)], dtype=np.int16)
+
             right_mean_coords = np.asarray([np.mean([mesh_coords[p] for p in [2, 94]], axis=0),
                                            np.mean([mesh_coords[p] for p in [168, 6]], axis=0)], dtype=np.int16)
             left_mean_coords = right_mean_coords
-
             for i in left_mean_coords:
                 cv.circle(frame, i, 5, utils.RED)
             for i in right_mean_coords:
@@ -323,9 +337,9 @@ with (mp_face_detection.FaceDetection(model_selection=1, min_detection_confidenc
 
             # Detecting eye position if calibrated
             if is_calibrated:
-                right_distance = distanceRatio(right_key_points_coords[1][0], right_pupil_coords[0],
-                                               right_key_points_coords[1][0],
-                                               right_key_points_coords[0][0])
+                right_distance = distanceRatio(right_key_points_coords[1], right_pupil_coords,
+                                               right_key_points_coords[1],
+                                               right_key_points_coords[0])
                 if right_distance >= right_eye_calibration[0]:
                     eye_position = 'LEFT'
                     color = [utils.GRAY, utils.YELLOW]
@@ -338,9 +352,9 @@ with (mp_face_detection.FaceDetection(model_selection=1, min_detection_confidenc
                 utils.colorBackgroundText(frame, f'R: {round(right_distance,2)}, {eye_position}',
                                           FONTS, 1.0, (40, 220), 2, color[0], color[1], 8, 8)
 
-                left_distance = distanceRatio(left_key_points_coords[0][0], left_pupil_coords[0],
-                                              left_key_points_coords[0][0],
-                                              left_key_points_coords[1][0])
+                left_distance = distanceRatio(left_key_points_coords[0], left_pupil_coords,
+                                              left_key_points_coords[0],
+                                              left_key_points_coords[1])
                 if left_distance <= left_eye_calibration[0]:
                     eye_position = 'LEFT'
                     color = [utils.GRAY, utils.YELLOW]
@@ -390,7 +404,7 @@ with (mp_face_detection.FaceDetection(model_selection=1, min_detection_confidenc
                                          textThickness=2)
         frame = utils.textWithBackground(frame, f'cnt: {calibration_cnt}', FONTS, 1.0, (200, 50), bgOpacity=0.9,
                                          textThickness=2)
-        frame = utils.textWithBackground(frame, f'cnt: {frame.shape}', FONTS, 1.0, (300, 50), bgOpacity=0.9,
+        frame = utils.textWithBackground(frame, f'shape: {frame.shape}', FONTS, 0.75, (350, 50), bgOpacity=0.9,
                                          textThickness=2)
 
         # writing image for thumbnail drawing shape
@@ -401,12 +415,12 @@ with (mp_face_detection.FaceDetection(model_selection=1, min_detection_confidenc
             quit_condition = True
         if not is_calibrated and results.multi_face_landmarks and (key == ord('c') or key == ord('C')):
             if calibration_cnt < 2:
-                right_eye_calibration.append(distanceRatio(right_key_points_coords[1][0], right_pupil_coords[0],
-                                                           right_key_points_coords[1][0],
-                                                           right_key_points_coords[0][0]))
-                left_eye_calibration.append(distanceRatio(left_key_points_coords[0][0], left_pupil_coords[0],
-                                                          left_key_points_coords[0][0],
-                                                          left_key_points_coords[1][0]))
+                right_eye_calibration.append(distanceRatio(right_key_points_coords[1], right_pupil_coords,
+                                                           right_key_points_coords[1],
+                                                           right_key_points_coords[0]))
+                left_eye_calibration.append(distanceRatio(left_key_points_coords[0], left_pupil_coords,
+                                                          left_key_points_coords[0],
+                                                          left_key_points_coords[1]))
             else:
                 right_eye_calibration.append(distanceRatio(right_mean_coords[0][1], right_pupil_coords[1],
                                                            right_mean_coords[0][1],
