@@ -215,6 +215,7 @@ with (mp_face_detection.FaceDetection(model_selection=1, min_detection_confidenc
     is_calibrated = False
     left_eye_calibration = []
     right_eye_calibration = []
+    previous_center = None
 
     quit_condition = False
     while not quit_condition:
@@ -230,30 +231,54 @@ with (mp_face_detection.FaceDetection(model_selection=1, min_detection_confidenc
         rgb_frame = cv.cvtColor(frame, cv.COLOR_RGB2BGR)
 
         results = face_detection.process(rgb_frame)
+        # długości wycinanej ramki
+        y_offset = int(frame_height / 4)  # tutaj wartości można zmieniać
+        x_offset = int(frame_width / 4)
         if results.detections:
-            frame_height, frame_width = frame.shape[:2]
-            test = results.detections
-            bounding_box = results.detections[0].location_data.relative_bounding_box
-            y_center = int(((2 * bounding_box.ymin + bounding_box.height) / 2) * frame_height)
-            x_center = int(((2 * bounding_box.xmin + bounding_box.width) / 2) * frame_width)
-            y_offset = int(frame_height / 4) #tutaj wartość można zmieniać
-            x_offset = int(frame_width / 4)
-            # mp.solutions.drawing_utils.draw_detection(frame, results.detections[0])
-            diff = y_center-y_offset
-            if diff < 0:
-                y_center -= diff
-            diff = x_center - x_offset
-            if diff < 0:
-                x_center -= diff
-            frame = frame[y_center-y_offset:y_center+y_offset,
-                          x_center-x_offset:x_center+x_offset]
+            for detections in results.detections:
+                frame_height, frame_width = frame.shape[:2]
+                test = results.detections
+
+                bounding_box = detections.location_data.relative_bounding_box
+                y_center = int(((2 * bounding_box.ymin + bounding_box.height) / 2) * frame_height)
+                x_center = int(((2 * bounding_box.xmin + bounding_box.width) / 2) * frame_width)
+                # mp.solutions.drawing_utils.draw_detection(frame, results.detections[0])
+
+                # rozwiązanie problemu wychodzenia współrzędnych wycinanej ramki poza obraz
+                diff = y_center - y_offset
+                if diff < 0:
+                    y_center -= diff
+                diff = x_center - x_offset
+                if diff < 0:
+                    x_center -= diff
+                sum = y_center + y_offset
+                if sum > frame_height:
+                    y_center -= sum - frame_height
+                sum = x_center + x_offset
+                if sum > frame_width:
+                    x_center -= sum - frame_width
+
+                current_center = (y_center, x_center)
+                if previous_center is None:
+                    break
+                elif euclideanDistance(current_center, previous_center) < 50:
+                    # zmniejszenie trzęsienia obrazu
+                    current_center = (int((current_center[0] + 6 * previous_center[0]) / 7),
+                                      int((current_center[1] + 6 * previous_center[1]) / 7))
+                    break
+
+            previous_center = current_center
+            # wycinanie ramki
+            frame = frame[current_center[0] - y_offset: current_center[0] + y_offset,
+                          current_center[1] - x_offset: current_center[1] + x_offset]
             frame = cv.resize(frame, (frame_width, frame_height), interpolation=cv.INTER_CUBIC)
             rgb_frame = cv.cvtColor(frame, cv.COLOR_RGB2BGR)
 
         results = face_mesh.process(rgb_frame)
         if results.multi_face_landmarks:
             test = results.multi_face_landmarks
-            mesh_coords = landmarksDetection(frame, results, False)
+            mesh_coords = landmarksDetection(frame, results, True)
+
             ratio = blinkRatio(frame, mesh_coords, RIGHT_EYE, LEFT_EYE)
             # cv.putText(frame, f'ratio {ratio}', (100, 100), FONTS, 1.0, utils.GREEN, 2)
             utils.colorBackgroundText(frame, f'Ratio : {round(ratio, 2)}', FONTS, 0.7, (30, 100), 2, utils.PINK,
