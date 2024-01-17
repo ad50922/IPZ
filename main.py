@@ -4,6 +4,7 @@ import time
 import utils
 import math
 import numpy as np
+from moviepy.editor import *
 
 # variables
 frame_counter = 0
@@ -201,9 +202,15 @@ def pixelCounter(first_piece, second_piece, third_piece):
         color = [utils.GRAY, utils.YELLOW]
     return pos_eye, color
 
+# proba przyspieszenia wideo
+video = VideoFileClip("testvideo.mp4")
+fast =  video.fx(vfx.speedx,2)
+if not ("fast.mp4"):
+    fast.write_videofile("fast.mp4")
 
 # camera object
-camera = cv.VideoCapture(1)
+camera = cv.VideoCapture("fast.mp4")
+# camera = cv.VideoCapture(0)
 mp_face_detection = mp.solutions.face_detection
 mp_face_mesh = mp.solutions.face_mesh
 with (mp_face_detection.FaceDetection(model_selection=1, min_detection_confidence=0.5) as face_detection,
@@ -215,10 +222,10 @@ with (mp_face_detection.FaceDetection(model_selection=1, min_detection_confidenc
     is_calibrated = False
     left_eye_calibration = []
     right_eye_calibration = []
-    previous_center = None
 
     quit_condition = False
     while not quit_condition:
+        frames_history = [] # próba dodania zliczania wartości na podstawie średniej z kilku klatek. linijki oznaczę #mean
         frame_counter += 1  # frame counter
         ret, frameBeforeFlip = camera.read()  # getting frame from camera
         if not ret:
@@ -226,59 +233,35 @@ with (mp_face_detection.FaceDetection(model_selection=1, min_detection_confidenc
 
         #  resizing frame
         frame = cv.flip(frameBeforeFlip, 1)   #odwrocilem kamere bo jest przejrzysciej i spowodowalem komplikacje, juz opanowane
-        frame = cv.resize(frame, None, fx=1.5, fy=1.5, interpolation=cv.INTER_CUBIC)
+        # frame = cv.resize(frame, None, fx=1.5, fy=1.5, interpolation=cv.INTER_CUBIC)
         frame_height, frame_width = frame.shape[:2]
         rgb_frame = cv.cvtColor(frame, cv.COLOR_RGB2BGR)
 
         results = face_detection.process(rgb_frame)
-        # długości wycinanej ramki
-        y_offset = int(frame_height / 4)  # tutaj wartości można zmieniać
-        x_offset = int(frame_width / 4)
         if results.detections:
-            for detections in results.detections:
-                frame_height, frame_width = frame.shape[:2]
-                test = results.detections
-
-                bounding_box = detections.location_data.relative_bounding_box
-                y_center = int(((2 * bounding_box.ymin + bounding_box.height) / 2) * frame_height)
-                x_center = int(((2 * bounding_box.xmin + bounding_box.width) / 2) * frame_width)
-                # mp.solutions.drawing_utils.draw_detection(frame, results.detections[0])
-
-                # rozwiązanie problemu wychodzenia współrzędnych wycinanej ramki poza obraz
-                diff = y_center - y_offset
-                if diff < 0:
-                    y_center -= diff
-                diff = x_center - x_offset
-                if diff < 0:
-                    x_center -= diff
-                sum = y_center + y_offset
-                if sum > frame_height:
-                    y_center -= sum - frame_height
-                sum = x_center + x_offset
-                if sum > frame_width:
-                    x_center -= sum - frame_width
-
-                current_center = (y_center, x_center)
-                if previous_center is None:
-                    break
-                elif euclideanDistance(current_center, previous_center) < 50:
-                    # zmniejszenie trzęsienia obrazu
-                    current_center = (int((current_center[0] + 6 * previous_center[0]) / 7),
-                                      int((current_center[1] + 6 * previous_center[1]) / 7))
-                    break
-
-            previous_center = current_center
-            # wycinanie ramki
-            frame = frame[current_center[0] - y_offset: current_center[0] + y_offset,
-                          current_center[1] - x_offset: current_center[1] + x_offset]
+            frame_height, frame_width = frame.shape[:2]
+            test = results.detections
+            bounding_box = results.detections[0].location_data.relative_bounding_box
+            y_center = int(((2 * bounding_box.ymin + bounding_box.height) / 2) * frame_height)
+            x_center = int(((2 * bounding_box.xmin + bounding_box.width) / 2) * frame_width)
+            y_offset = int(frame_height / 2) #tutaj wartość można zmieniać
+            x_offset = int(frame_width / 2)
+            # mp.solutions.drawing_utils.draw_detection(frame, results.detections[0])
+            diff = y_center-y_offset
+            if diff < 0:
+                y_center -= diff
+            diff = x_center - x_offset
+            if diff < 0:
+                x_center -= diff
+            frame = frame[y_center-y_offset:y_center+y_offset,
+                          x_center-x_offset:x_center+x_offset]
             frame = cv.resize(frame, (frame_width, frame_height), interpolation=cv.INTER_CUBIC)
             rgb_frame = cv.cvtColor(frame, cv.COLOR_RGB2BGR)
 
         results = face_mesh.process(rgb_frame)
         if results.multi_face_landmarks:
             test = results.multi_face_landmarks
-            mesh_coords = landmarksDetection(frame, results, True)
-
+            mesh_coords = landmarksDetection(frame, results, False)
             ratio = blinkRatio(frame, mesh_coords, RIGHT_EYE, LEFT_EYE)
             # cv.putText(frame, f'ratio {ratio}', (100, 100), FONTS, 1.0, utils.GREEN, 2)
             utils.colorBackgroundText(frame, f'Ratio : {round(ratio, 2)}', FONTS, 0.7, (30, 100), 2, utils.PINK,
@@ -365,31 +348,56 @@ with (mp_face_detection.FaceDetection(model_selection=1, min_detection_confidenc
                 right_distance = distanceRatio(right_key_points_coords[1], right_pupil_coords,
                                                right_key_points_coords[1],
                                                right_key_points_coords[0])
+                #próba zmiany na wyswietlanie pozycji oka na podstawie pozycji dóch oczu na raz
+                def add_at_0(x,position):
+                    position.insert(0, x)
+                    if len(position) > 2:
+                        position.pop(0)
+                def add_at_1(x,position):
+                    position.insert(1, x)
+                    if len(position) > 2:
+                        position.pop(0)
+                horizontal_eye_positions = []
+                vertical_eye_positions = []
+
                 if right_distance >= right_eye_calibration[0]:
                     eye_position = 'LEFT'
+                    add_at_0(eye_position, horizontal_eye_positions)
                     color = [utils.GRAY, utils.YELLOW]
                 elif right_distance <= right_eye_calibration[1]:
-                    eye_position = "RIGHT"
+                    eye_position = 'RIGHT'
+                    add_at_0(eye_position, horizontal_eye_positions)
                     color = [utils.BLACK, utils.GREEN]
                 else:
                     eye_position = 'CENTER'
+                    add_at_0(eye_position, horizontal_eye_positions)
                     color = [utils.YELLOW, utils.PINK]
-                utils.colorBackgroundText(frame, f'R: {round(right_distance,2)}, {eye_position}',
-                                          FONTS, 1.0, (40, 220), 2, color[0], color[1], 8, 8)
+                # utils.colorBackgroundText(frame, f'R: {round(right_distance,2)}, {eye_position}',
+                #                           FONTS, 1.0, (40, 220), 2, color[0], color[1], 8, 8)
 
                 left_distance = distanceRatio(left_key_points_coords[0], left_pupil_coords,
                                               left_key_points_coords[0],
                                               left_key_points_coords[1])
                 if left_distance <= left_eye_calibration[0]:
                     eye_position = 'LEFT'
+                    add_at_1(eye_position, horizontal_eye_positions)
                     color = [utils.GRAY, utils.YELLOW]
                 elif left_distance >= left_eye_calibration[1]:
-                    eye_position = "RIGHT"
+                    eye_position = 'RIGHT'
+                    add_at_1(eye_position, horizontal_eye_positions)
                     color = [utils.BLACK, utils.GREEN]
                 else:
                     eye_position = 'CENTER'
+                    add_at_1(eye_position, horizontal_eye_positions)
                     color = [utils.YELLOW, utils.PINK]
-                utils.colorBackgroundText(frame, f'L: {round(left_distance,2)}, {eye_position}',
+                # utils.colorBackgroundText(frame, f'L: {round(left_distance,2)}, {eye_position}',
+                #                           FONTS, 1.0, (40, 280), 2, color[0], color[1], 8, 8)
+
+                final_horizontal_eye_position = ''
+                if horizontal_eye_positions[0] == horizontal_eye_positions[1]:
+                    final_horizontal_eye_position = horizontal_eye_positions[0]
+
+                utils.colorBackgroundText(frame, f' {final_horizontal_eye_position}',
                                           FONTS, 1.0, (40, 280), 2, color[0], color[1], 8, 8)
 
                 right_distance = distanceRatio(right_mean_coords[0][1], right_pupil_coords[1],
@@ -397,29 +405,42 @@ with (mp_face_detection.FaceDetection(model_selection=1, min_detection_confidenc
                                                right_mean_coords[1][1])
                 if right_distance >= right_eye_calibration[2]:
                     eye_position = 'UP'
+                    add_at_0(eye_position, vertical_eye_positions)
                     color = [utils.GRAY, utils.YELLOW]
                 elif right_distance <= right_eye_calibration[3]:
                     eye_position = "DOWN"
+                    add_at_0(eye_position, vertical_eye_positions)
                     color = [utils.BLACK, utils.GREEN]
                 else:
                     eye_position = 'CENTER'
+                    add_at_0(eye_position, vertical_eye_positions)
                     color = [utils.YELLOW, utils.PINK]
-                utils.colorBackgroundText(frame, f'R: {round(right_distance,2)}, {eye_position}',
-                                          FONTS, 1.0, (40, 380), 2, color[0], color[1], 8, 8)
+                # utils.colorBackgroundText(frame, f'R: {round(right_distance,2)}, {eye_position}',
+                #                           FONTS, 1.0, (40, 380), 2, color[0], color[1], 8, 8)
 
                 left_distance = distanceRatio(left_mean_coords[0][1], left_pupil_coords[1],
                                               left_mean_coords[0][1],
                                               left_mean_coords[1][1])
                 if left_distance >= left_eye_calibration[2]:
                     eye_position = 'UP'
+                    add_at_1(eye_position, vertical_eye_positions)
                     color = [utils.GRAY, utils.YELLOW]
                 elif left_distance <= left_eye_calibration[3]:
                     eye_position = "DOWN"
+                    add_at_1(eye_position, vertical_eye_positions)
                     color = [utils.BLACK, utils.GREEN]
                 else:
                     eye_position = 'CENTER'
+                    add_at_1(eye_position, vertical_eye_positions)
                     color = [utils.YELLOW, utils.PINK]
-                utils.colorBackgroundText(frame, f'L: {round(left_distance,2)}, {eye_position}',
+                # utils.colorBackgroundText(frame, f'L: {round(left_distance,2)}, {eye_position}',
+                #                           FONTS, 1.0, (40, 440), 2, color[0], color[1], 8, 8)
+
+                final_vertical_eye_position = ''
+                if vertical_eye_positions[0] == vertical_eye_positions[1]:
+                    final_vertical_eye_position = vertical_eye_positions[0]
+
+                utils.colorBackgroundText(frame, f' {final_vertical_eye_position}',
                                           FONTS, 1.0, (40, 440), 2, color[0], color[1], 8, 8)
 
         # calculating  frame per seconds FPS
@@ -435,7 +456,7 @@ with (mp_face_detection.FaceDetection(model_selection=1, min_detection_confidenc
         # writing image for thumbnail drawing shape
         # cv.imwrite(f'img/frame_{frame_counter}.png', frame)
         cv.imshow('frame', frame)
-        key = cv.waitKey(2)
+        key = cv.waitKey(1)
         if key == ord('q') or key == ord('Q'):
             quit_condition = True
         if not is_calibrated and results.multi_face_landmarks and (key == ord('c') or key == ord('C')):
