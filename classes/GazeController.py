@@ -38,173 +38,102 @@ RIGHT_IRIS = [474, 475, 476, 477]
 RIGHT_KEY_POINTS = [33, 133, 9, 8]  # lewo, prawo, góra, dół
 
 
-# landmark detection function
-def landmarksDetection(img, results, draw=False):
-    img_height, img_width = img.shape[:2]
-    # list[(x,y,z), (x,y,z)....]
-    mesh_coord = [[int(point.x * img_width), int(point.y * img_height),
-                  int(point.z * img_width)] for point in
-                  results.multi_face_landmarks[0].landmark]
-    if draw:
-        [cv.circle(img, p[:2], 2, (0, 255, 0), -1) for p in mesh_coord]
-
-    # returning the list of tuples for each landmarks
-    return mesh_coord
-
-
-# Euclidean distance
-def euclideanDistance(point, point1):
-    x, y = point[:2]
-    x1, y1 = point1[:2]
-    distance = math.sqrt((x1 - x) ** 2 + (y1 - y) ** 2)
-    return distance
-
-
-# Distance ratio of point1->point2 euclidean distance
-# to point3->point4 distance
-def distanceRatio(point1, point2, point3, point4):
-    temp1 = np.subtract(point1, point2)
-    temp2 = np.subtract(point3, point4)
-    d1 = np.sqrt(np.dot(np.transpose(temp1), temp1))
-    d2 = np.sqrt(np.dot(np.transpose(temp2), temp2))
-    if d2 == 0:
-        d2 = 0.001
-    if d2 == np.nan:
-        print("what, why")
-    return d1 / d2
-
-
-# Blinking Ratio
-def blinkRatio(img, landmarks, right_indices, left_indices):
-    # Right eyes
-    # horizontal line
-    rh_right = landmarks[right_indices[0]]
-    rh_left = landmarks[right_indices[8]]
-    # vertical line
-    rv_top = landmarks[right_indices[12]]
-    rv_bottom = landmarks[right_indices[4]]
-    # draw lines on right eyes
-    # cv.line(img, rh_right, rh_left, utils.GREEN, 2)
-    # cv.line(img, rv_top, rv_bottom, utils.WHITE, 2)
-
-    # LEFT_EYE
-    # horizontal line
-    lh_right = landmarks[left_indices[0]]
-    lh_left = landmarks[left_indices[8]]
-
-    # vertical line
-    lv_top = landmarks[left_indices[12]]
-    lv_bottom = landmarks[left_indices[4]]
-
-    rhDistance = euclideanDistance(rh_right, rh_left)
-    rvDistance = euclideanDistance(rv_top, rv_bottom)
-
-    lvDistance = euclideanDistance(lv_top, lv_bottom)
-    lhDistance = euclideanDistance(lh_right, lh_left)
-
-    reRatio = rhDistance / rvDistance
-    leRatio = lhDistance / lvDistance
-
-    ratio = (reRatio + leRatio) / 2
-    return ratio
+# # Eyes Extrctor function,
+# def eyesExtractor(img, right_eye_coords, left_eye_coords):
+#     # converting color image to  scale image
+#     gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+#
+#     # getting the dimension of image
+#     dim = gray.shape
+#
+#     # creating mask from gray scale dim
+#     mask = np.zeros(dim, dtype=np.uint8)
+#
+#     # drawing Eyes Shape on mask with white color
+#     cv.fillPoly(mask, [np.array(right_eye_coords, dtype=np.int32)], 255)
+#     cv.fillPoly(mask, [np.array(left_eye_coords, dtype=np.int32)], 255)
+#
+#     # showing the mask
+#     # cv.imshow('mask', mask)
+#
+#     # draw eyes image on mask, where white shape is
+#     eyes = cv.bitwise_and(gray, gray, mask=mask)
+#     # change black color to gray other than eys
+#     # cv.imshow('eyes draw', eyes)
+#     eyes[mask == 0] = 155
+#
+#     # getting minium and maximum x and y  for right and left eyes
+#     # For Right Eye
+#     r_max_x = (max(right_eye_coords, key=lambda item: item[0]))[0]
+#     r_min_x = (min(right_eye_coords, key=lambda item: item[0]))[0]
+#     r_max_y = (max(right_eye_coords, key=lambda item: item[1]))[1]
+#     r_min_y = (min(right_eye_coords, key=lambda item: item[1]))[1]
+#
+#     # For LEFT Eye
+#     l_max_x = (max(left_eye_coords, key=lambda item: item[0]))[0]
+#     l_min_x = (min(left_eye_coords, key=lambda item: item[0]))[0]
+#     l_max_y = (max(left_eye_coords, key=lambda item: item[1]))[1]
+#     l_min_y = (min(left_eye_coords, key=lambda item: item[1]))[1]
+#
+#     # croping the eyes from mask
+#     cropped_right = eyes[r_min_y: r_max_y, r_min_x: r_max_x]
+#     cropped_left = eyes[l_min_y: l_max_y, l_min_x: l_max_x]
+#
+#     # returning the cropped eyes
+#     return cropped_right, cropped_left
 
 
-# Eyes Extrctor function,
-def eyesExtractor(img, right_eye_coords, left_eye_coords):
-    # converting color image to  scale image
-    gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-
-    # getting the dimension of image
-    dim = gray.shape
-
-    # creating mask from gray scale dim
-    mask = np.zeros(dim, dtype=np.uint8)
-
-    # drawing Eyes Shape on mask with white color
-    cv.fillPoly(mask, [np.array(right_eye_coords, dtype=np.int32)], 255)
-    cv.fillPoly(mask, [np.array(left_eye_coords, dtype=np.int32)], 255)
-
-    # showing the mask
-    # cv.imshow('mask', mask)
-
-    # draw eyes image on mask, where white shape is
-    eyes = cv.bitwise_and(gray, gray, mask=mask)
-    # change black color to gray other than eys
-    # cv.imshow('eyes draw', eyes)
-    eyes[mask == 0] = 155
-
-    # getting minium and maximum x and y  for right and left eyes
-    # For Right Eye
-    r_max_x = (max(right_eye_coords, key=lambda item: item[0]))[0]
-    r_min_x = (min(right_eye_coords, key=lambda item: item[0]))[0]
-    r_max_y = (max(right_eye_coords, key=lambda item: item[1]))[1]
-    r_min_y = (min(right_eye_coords, key=lambda item: item[1]))[1]
-
-    # For LEFT Eye
-    l_max_x = (max(left_eye_coords, key=lambda item: item[0]))[0]
-    l_min_x = (min(left_eye_coords, key=lambda item: item[0]))[0]
-    l_max_y = (max(left_eye_coords, key=lambda item: item[1]))[1]
-    l_min_y = (min(left_eye_coords, key=lambda item: item[1]))[1]
-
-    # croping the eyes from mask
-    cropped_right = eyes[r_min_y: r_max_y, r_min_x: r_max_x]
-    cropped_left = eyes[l_min_y: l_max_y, l_min_x: l_max_x]
-
-    # returning the cropped eyes
-    return cropped_right, cropped_left
-
-
-# Eyes Postion Estimator
-def positionEstimator(cropped_eye):
-    # getting height and width of eye
-    h, w = cropped_eye.shape
-
-    # remove the noise from images
-    gaussain_blur = cv.GaussianBlur(cropped_eye, (9, 9), 0)
-    median_blur = cv.medianBlur(gaussain_blur, 3)
-
-    # applying thrsholding to convert binary_image
-    ret, threshed_eye = cv.threshold(median_blur, 130, 255, cv.THRESH_BINARY)
-
-    # create fixd part for eye with
-    piece = int(w / 3)
-
-    # slicing the eyes into three parts
-    right_piece = threshed_eye[0:h, 0:piece]
-    center_piece = threshed_eye[0:h, piece: piece + piece]
-    left_piece = threshed_eye[0:h, piece + piece:w]
-
-    # calling pixel counter function
-    eye_position, color = pixelCounter(left_piece, center_piece, right_piece)   #jako ze zrobilem na kamerze lustrzane odbicie, w tym miejscu zamienilem kolejnoscia left z right i jest git
-
-    return eye_position, color
+# # Eyes Postion Estimator
+# def positionEstimator(cropped_eye):
+#     # getting height and width of eye
+#     h, w = cropped_eye.shape
+#
+#     # remove the noise from images
+#     gaussain_blur = cv.GaussianBlur(cropped_eye, (9, 9), 0)
+#     median_blur = cv.medianBlur(gaussain_blur, 3)
+#
+#     # applying thrsholding to convert binary_image
+#     ret, threshed_eye = cv.threshold(median_blur, 130, 255, cv.THRESH_BINARY)
+#
+#     # create fixd part for eye with
+#     piece = int(w / 3)
+#
+#     # slicing the eyes into three parts
+#     right_piece = threshed_eye[0:h, 0:piece]
+#     center_piece = threshed_eye[0:h, piece: piece + piece]
+#     left_piece = threshed_eye[0:h, piece + piece:w]
+#
+#     # calling pixel counter function
+#     eye_position, color = pixelCounter(left_piece, center_piece, right_piece)   #jako ze zrobilem na kamerze lustrzane odbicie, w tym miejscu zamienilem kolejnoscia left z right i jest git
+#
+#     return eye_position, color
 
 
 # creating pixel counter function
-def pixelCounter(first_piece, second_piece, third_piece):
-    # counting black pixel in each part
-    right_part = np.sum(first_piece == 0)
-    center_part = np.sum(second_piece == 0)
-    left_part = np.sum(third_piece == 0)
-    # creating list of these values
-    eye_parts = [right_part, center_part, left_part] #strzelam ze tutaj bedzie trzeba dodac logike gora/dol dodatkowo
-
-    # getting the index of max values in the list
-    max_index = eye_parts.index(max(eye_parts))
-    pos_eye = ''
-    if max_index == 0:                               #i potem pewnie tutaj dodoac
-        pos_eye = "RIGHT"
-        color = [utils.BLACK, utils.GREEN]
-    elif max_index == 1:
-        pos_eye = 'CENTER'
-        color = [utils.YELLOW, utils.PINK]
-    elif max_index == 2:
-        pos_eye = 'LEFT'
-        color = [utils.GRAY, utils.YELLOW]
-    else:
-        pos_eye = "Closed"
-        color = [utils.GRAY, utils.YELLOW]
-    return pos_eye, color
+# def pixelCounter(first_piece, second_piece, third_piece):
+#     # counting black pixel in each part
+#     right_part = np.sum(first_piece == 0)
+#     center_part = np.sum(second_piece == 0)
+#     left_part = np.sum(third_piece == 0)
+#     # creating list of these values
+#     eye_parts = [right_part, center_part, left_part] #strzelam ze tutaj bedzie trzeba dodac logike gora/dol dodatkowo
+#
+#     # getting the index of max values in the list
+#     max_index = eye_parts.index(max(eye_parts))
+#     pos_eye = ''
+#     if max_index == 0:                               #i potem pewnie tutaj dodoac
+#         pos_eye = "RIGHT"
+#         color = [utils.BLACK, utils.GREEN]
+#     elif max_index == 1:
+#         pos_eye = 'CENTER'
+#         color = [utils.YELLOW, utils.PINK]
+#     elif max_index == 2:
+#         pos_eye = 'LEFT'
+#         color = [utils.GRAY, utils.YELLOW]
+#     else:
+#         pos_eye = "Closed"
+#         color = [utils.GRAY, utils.YELLOW]
+#     return pos_eye, color
 
 
 class GazeController:
@@ -222,11 +151,12 @@ class GazeController:
         self._left_eye_calibration = []
         self._right_eye_calibration = []
         self._reference_face_3d_coords = []
-        self._previous_center = None
+        self._current_center = None
         self._zoom = 1.0
         return
 
-    def Reset(self):
+    # Reset object state
+    def reset(self):
         self._start_time = time.time()
         self._frame_counter = 0
         self._calibration_cnt = 0
@@ -234,27 +164,212 @@ class GazeController:
         self._left_eye_calibration = []
         self._right_eye_calibration = []
         self._reference_face_3d_coords = []
-        self._previous_center = None
+        self._current_center = None
         self._zoom = 1.0
         return
 
-    def ChangeZoom(self, new_zoom):
+    # Change zoom of cropped image
+    def change_zoom(self, new_zoom):
         if new_zoom < 1.0:
             new_zoom = 1.0
         elif new_zoom > 6.0:
             new_zoom = 6.0
         self._zoom = new_zoom
-        self._previous_center = None
+        self._current_center = None
         return new_zoom
 
-    def Calculate(self, frame, do_calibration = False, reset_calibration = False):
+    # Euclidean distance
+    def _euclidean_distance(self, point, point1):
+        x, y = point[:2]
+        x1, y1 = point1[:2]
+        distance = math.sqrt((x1 - x) ** 2 + (y1 - y) ** 2)
+        return distance
+
+    # Distance ratio of point1->point2 Euclidean distance
+    # to point3->point4 Euclidean distance
+    def _distance_ratio(self, point1, point2, point3, point4):
+        temp1 = np.subtract(point1, point2)
+        temp2 = np.subtract(point3, point4)
+        d1 = np.sqrt(np.dot(np.transpose(temp1), temp1))
+        d2 = np.sqrt(np.dot(np.transpose(temp2), temp2))
+        if d2 == 0:
+            d2 = 0.001
+        if d2 == np.nan:
+            print("what, why")
+        return d1 / d2
+
+    # Landmark detection function
+    def _landmarks_detection(self, img, results, draw=False):
+        img_height, img_width = img.shape[:2]
+        # list[(x,y,z), (x,y,z)....]
+        mesh_coord = [[int(point.x * img_width), int(point.y * img_height),
+                       int(point.z * img_width)] for point in
+                      results.multi_face_landmarks[0].landmark]
+        if draw:
+            [cv.circle(img, p[:2], 2, (0, 255, 0), -1) for p in mesh_coord]
+
+        # returning the list of tuples for each landmarks
+        return mesh_coord
+
+    # Image crop. Makes it so the image's focus is on the face.
+    # Frame width and height remains the same.
+    def _crop_image(self, frame, results, x_offset, y_offset):
+        frame_height, frame_width = frame.shape[:2]
+        temp_center = (0, 0)
+        for detections in results.detections:
+            # test = results.detections
+            bounding_box = detections.location_data.relative_bounding_box
+            y_center = int(((2 * bounding_box.ymin + bounding_box.height) / 2) * frame_height)
+            x_center = int(((2 * bounding_box.xmin + bounding_box.width) / 2) * frame_width)
+            # mp.solutions.drawing_utils.draw_detection(frame, results.detections[0])
+
+            diff = y_center - y_offset
+            if diff < 0:
+                y_center -= diff
+            diff = x_center - x_offset
+            if diff < 0:
+                x_center -= diff
+            sum = y_center + y_offset
+            if sum > frame_height:
+                y_center -= sum - frame_height
+            sum = x_center + x_offset
+            if sum > frame_width:
+                x_center -= sum - frame_width
+
+            temp_center = (y_center, x_center)
+            if self._current_center is None:
+                break
+            elif self._euclidean_distance(temp_center, self._current_center) < 80:
+                # Screen shake reduction
+                temp_center = (int((temp_center[0] + 6 * self._current_center[0]) / 7),
+                               int((temp_center[1] + 6 * self._current_center[1]) / 7))
+                break
+
+        self._current_center = temp_center
+        # Cropping image
+        frame = frame[temp_center[0] - y_offset: temp_center[0] + y_offset,
+                      temp_center[1] - x_offset: temp_center[1] + x_offset]
+        return cv.resize(frame, (frame_width, frame_height), interpolation=cv.INTER_CUBIC)
+
+    # Blinking ratio
+    def _blink_ratio(self, img, landmarks, right_indices, left_indices):
+        # Right eyes
+        # horizontal line
+        rh_right = landmarks[right_indices[0]]
+        rh_left = landmarks[right_indices[8]]
+        # vertical line
+        rv_top = landmarks[right_indices[12]]
+        rv_bottom = landmarks[right_indices[4]]
+        # draw lines on right eyes
+        # cv.line(img, rh_right, rh_left, utils.GREEN, 2)
+        # cv.line(img, rv_top, rv_bottom, utils.WHITE, 2)
+
+        # LEFT_EYE
+        # horizontal line
+        lh_right = landmarks[left_indices[0]]
+        lh_left = landmarks[left_indices[8]]
+
+        # vertical line
+        lv_top = landmarks[left_indices[12]]
+        lv_bottom = landmarks[left_indices[4]]
+
+        rhDistance = self._euclidean_distance(rh_right, rh_left)
+        rvDistance = self._euclidean_distance(rv_top, rv_bottom)
+
+        lvDistance = self._euclidean_distance(lv_top, lv_bottom)
+        lhDistance = self._euclidean_distance(lh_right, lh_left)
+
+        reRatio = rhDistance / rvDistance
+        leRatio = lhDistance / lvDistance
+
+        ratio = (reRatio + leRatio) / 2
+        return ratio
+
+    # Gaze detection. Works only if calibrated.
+    # Returns gaze direction as a number:
+    #
+    def _gaze_detection(self, right_key_points_coords, left_key_points_coords, right_mean_coords, left_mean_coords,
+                        right_pupil_coords, left_pupil_coords):
+        gaze_direction = 5
+
+        right_distance = self._distance_ratio(right_mean_coords[0][1], right_pupil_coords[1],
+                                              right_mean_coords[0][1],
+                                              right_mean_coords[1][1])
+        if right_distance >= self._right_eye_calibration[2]:
+            eye_position = 'UP'
+            color = [utils.GRAY, utils.YELLOW]
+        elif right_distance <= self._right_eye_calibration[3]:
+            eye_position = "DOWN"
+            color = [utils.BLACK, utils.GREEN]
+        else:
+            eye_position = 'CENTER'
+            color = [utils.YELLOW, utils.PINK]
+        # utils.colorBackgroundText(frame, f'R: {round(right_distance, 2)}, {eye_position}',
+        #                           FONTS, 1.0, (40, 380), 2, color[0], color[1], 8, 8)
+
+        left_distance = self._distance_ratio(left_mean_coords[0][1], left_pupil_coords[1],
+                                             left_mean_coords[0][1],
+                                             left_mean_coords[1][1])
+        if left_distance >= self._left_eye_calibration[2]:
+            if eye_position == 'UP':
+                gaze_direction = 3
+            else:
+                eye_position = 'UP'
+            color = [utils.GRAY, utils.YELLOW]
+        elif left_distance <= self._left_eye_calibration[3]:
+            if eye_position == 'DOWN':
+                gaze_direction = 4
+            else:
+                eye_position = "DOWN"
+            color = [utils.BLACK, utils.GREEN]
+        else:
+            eye_position = 'CENTER'
+            color = [utils.YELLOW, utils.PINK]
+        # utils.colorBackgroundText(frame, f'L: {round(left_distance, 2)}, {eye_position}',
+        #                           FONTS, 1.0, (40, 440), 2, color[0], color[1], 8, 8)
+
+        right_distance = self._distance_ratio(right_key_points_coords[1], right_pupil_coords,
+                                              right_key_points_coords[1],
+                                              right_key_points_coords[0])
+        if right_distance >= self._right_eye_calibration[0]:
+            eye_position = 'LEFT'
+            color = [utils.GRAY, utils.YELLOW]
+        elif right_distance <= self._right_eye_calibration[1]:
+            eye_position = "RIGHT"
+            color = [utils.BLACK, utils.GREEN]
+        else:
+            eye_position = 'CENTER'
+            color = [utils.YELLOW, utils.PINK]
+        # utils.colorBackgroundText(frame, f'R: {round(right_distance, 2)}, {eye_position}',
+        #                           FONTS, 1.0, (40, 220), 2, color[0], color[1], 8, 8)
+
+        left_distance = self._distance_ratio(left_key_points_coords[0], left_pupil_coords,
+                                             left_key_points_coords[0],
+                                             left_key_points_coords[1])
+        if left_distance <= self._left_eye_calibration[0]:
+            if eye_position == 'LEFT':
+                gaze_direction = 1
+            else:
+                eye_position = 'LEFT'
+            color = [utils.GRAY, utils.YELLOW]
+        elif left_distance >= self._left_eye_calibration[1]:
+            if eye_position == 'RIGHT':
+                gaze_direction = 2
+            else:
+                eye_position = "RIGHT"
+            color = [utils.BLACK, utils.GREEN]
+        else:
+            eye_position = 'CENTER'
+            color = [utils.YELLOW, utils.PINK]
+        # utils.colorBackgroundText(frame, f'L: {round(left_distance, 2)}, {eye_position}',
+        #                           FONTS, 1.0, (40, 280), 2, color[0], color[1], 8, 8)
+        return gaze_direction
+
+    # Main calculation function, detects gaze direction
+    def calculate(self, frame, do_calibration = False, reset_calibration = False):
         self._frame_counter += 1  # frame counter
         frame_height, frame_width = frame.shape[:2]
         rgb_frame = cv.cvtColor(frame, cv.COLOR_RGB2BGR)
-
-        # Długości wycinanej ramki
-        y_offset = int(frame_height / (self._zoom * 2.0))  # tutaj wartości można zmieniać
-        x_offset = int(frame_width / (self._zoom * 2.0))
 
         is_face = False
         gaze_direction = 0
@@ -262,42 +377,10 @@ class GazeController:
         results = self.face_detection.process(rgb_frame)
         if results.detections:
             is_face = True
-            for detections in results.detections:
-                # test = results.detections
-
-                bounding_box = detections.location_data.relative_bounding_box
-                y_center = int(((2 * bounding_box.ymin + bounding_box.height) / 2) * frame_height)
-                x_center = int(((2 * bounding_box.xmin + bounding_box.width) / 2) * frame_width)
-                # mp.solutions.drawing_utils.draw_detection(frame, results.detections[0])
-
-                # Rozwiązanie problemu wychodzenia współrzędnych wycinanej ramki poza obraz
-                diff = y_center - y_offset
-                if diff < 0:
-                    y_center -= diff
-                diff = x_center - x_offset
-                if diff < 0:
-                    x_center -= diff
-                sum = y_center + y_offset
-                if sum > frame_height:
-                    y_center -= sum - frame_height
-                sum = x_center + x_offset
-                if sum > frame_width:
-                    x_center -= sum - frame_width
-
-                current_center = (y_center, x_center)
-                if self._previous_center is None:
-                    break
-                elif euclideanDistance(current_center, self._previous_center) < 80:
-                    # Zmniejszenie trzęsienia obrazu
-                    current_center = (int((current_center[0] + 6 * self._previous_center[0]) / 7),
-                                      int((current_center[1] + 6 * self._previous_center[1]) / 7))
-                    break
-
-            self._previous_center = current_center
-            # Wycinanie ramki
-            frame = frame[current_center[0] - y_offset: current_center[0] + y_offset,
-                          current_center[1] - x_offset: current_center[1] + x_offset]
-            frame = cv.resize(frame, (frame_width, frame_height), interpolation=cv.INTER_CUBIC)
+            # Długości wycinanej ramki
+            y_offset = int(frame_height / (self._zoom * 2.0))  # tutaj wartości można zmieniać
+            x_offset = int(frame_width / (self._zoom * 2.0))
+            frame = self._crop_image(frame, results, x_offset, y_offset)
             rgb_frame = cv.cvtColor(frame, cv.COLOR_RGB2BGR)
 
         results = self.face_mesh.process(rgb_frame)
@@ -305,11 +388,11 @@ class GazeController:
             # test = results.multi_face_landmarks
 
             # Getting face mesh coordinates
-            mesh_3d_coords = landmarksDetection(frame, results, False)
+            mesh_3d_coords = self._landmarks_detection(frame, results, True)
             mesh_2d_coords = [p[:2] for p in mesh_3d_coords]
 
             # Blink calculations
-            ratio = blinkRatio(frame, mesh_2d_coords, RIGHT_EYE, LEFT_EYE)
+            ratio = self._blink_ratio(frame, mesh_2d_coords, RIGHT_EYE, LEFT_EYE)
             # cv.putText(frame, f'ratio {ratio}', (100, 100), FONTS, 1.0, utils.GREEN, 2)
             utils.colorBackgroundText(frame, f'Ratio : {round(ratio, 2)}', FONTS, 0.7, (30, 100), 2, utils.PINK,
                                       utils.YELLOW)
@@ -363,8 +446,6 @@ class GazeController:
 
             # Detecting gaze direction if calibrated
             if self._is_calibrated and not are_closed and not reset_calibration:
-                gaze_direction = 5
-
                 #     # Testy estymacji pozycji głowy
                 #     # Get 2d Coord
                 #     face_2d = np.array(mesh_2d_coords[:468], dtype=np.float64)
@@ -396,77 +477,9 @@ class GazeController:
                 #     mesh_3d_coords = np.asarray([np.dot(R, p) for p in mesh_3d_coords],dtype=int)
                 #     [cv.circle(frame, p[:2], 2, (0, 255, 0), -1) for p in mesh_3d_coords]
 
-                right_distance = distanceRatio(right_mean_coords[0][1], right_pupil_coords[1],
-                                               right_mean_coords[0][1],
-                                               right_mean_coords[1][1])
-                if right_distance >= self._right_eye_calibration[2]:
-                    eye_position = 'UP'
-                    color = [utils.GRAY, utils.YELLOW]
-                elif right_distance <= self._right_eye_calibration[3]:
-                    eye_position = "DOWN"
-                    color = [utils.BLACK, utils.GREEN]
-                else:
-                    eye_position = 'CENTER'
-                    color = [utils.YELLOW, utils.PINK]
-                utils.colorBackgroundText(frame, f'R: {round(right_distance, 2)}, {eye_position}',
-                                          FONTS, 1.0, (40, 380), 2, color[0], color[1], 8, 8)
+                gaze_direction = self._gaze_detection(right_key_points_coords, left_key_points_coords, right_mean_coords, left_mean_coords,
+                                                      right_pupil_coords, left_pupil_coords)
 
-                left_distance = distanceRatio(left_mean_coords[0][1], left_pupil_coords[1],
-                                              left_mean_coords[0][1],
-                                              left_mean_coords[1][1])
-                if left_distance >= self._left_eye_calibration[2]:
-                    if eye_position == 'UP':
-                        gaze_direction = 3
-                    else:
-                        eye_position = 'UP'
-                    color = [utils.GRAY, utils.YELLOW]
-                elif left_distance <= self._left_eye_calibration[3]:
-                    if eye_position == 'DOWN':
-                        gaze_direction = 4
-                    else:
-                        eye_position = "DOWN"
-                    color = [utils.BLACK, utils.GREEN]
-                else:
-                    eye_position = 'CENTER'
-                    color = [utils.YELLOW, utils.PINK]
-                utils.colorBackgroundText(frame, f'L: {round(left_distance, 2)}, {eye_position}',
-                                          FONTS, 1.0, (40, 440), 2, color[0], color[1], 8, 8)
-
-                right_distance = distanceRatio(right_key_points_coords[1], right_pupil_coords,
-                                               right_key_points_coords[1],
-                                               right_key_points_coords[0])
-                if right_distance >= self._right_eye_calibration[0]:
-                    eye_position = 'LEFT'
-                    color = [utils.GRAY, utils.YELLOW]
-                elif right_distance <= self._right_eye_calibration[1]:
-                    eye_position = "RIGHT"
-                    color = [utils.BLACK, utils.GREEN]
-                else:
-                    eye_position = 'CENTER'
-                    color = [utils.YELLOW, utils.PINK]
-                utils.colorBackgroundText(frame, f'R: {round(right_distance, 2)}, {eye_position}',
-                                          FONTS, 1.0, (40, 220), 2, color[0], color[1], 8, 8)
-
-                left_distance = distanceRatio(left_key_points_coords[0], left_pupil_coords,
-                                              left_key_points_coords[0],
-                                              left_key_points_coords[1])
-                if left_distance <= self._left_eye_calibration[0]:
-                    if eye_position == 'LEFT':
-                        gaze_direction = 1
-                    else:
-                        eye_position = 'LEFT'
-                    color = [utils.GRAY, utils.YELLOW]
-                elif left_distance >= self._left_eye_calibration[1]:
-                    if eye_position == 'RIGHT':
-                        gaze_direction = 2
-                    else:
-                        eye_position = "RIGHT"
-                    color = [utils.BLACK, utils.GREEN]
-                else:
-                    eye_position = 'CENTER'
-                    color = [utils.YELLOW, utils.PINK]
-                utils.colorBackgroundText(frame, f'L: {round(left_distance, 2)}, {eye_position}',
-                                          FONTS, 1.0, (40, 280), 2, color[0], color[1], 8, 8)
 
         # Calculating frames per seconds FPS
         end_time = time.time() - self._start_time
@@ -484,17 +497,17 @@ class GazeController:
             # if self._calibration_cnt == 0:
             #     reference_face_3d_coords = mesh_3d_coords[:468]
             if self._calibration_cnt < 2:
-                self._right_eye_calibration.append(distanceRatio(right_key_points_coords[1], right_pupil_coords,
+                self._right_eye_calibration.append(self._distance_ratio(right_key_points_coords[1], right_pupil_coords,
                                                    right_key_points_coords[1],
                                                    right_key_points_coords[0]))
-                self._left_eye_calibration.append(distanceRatio(left_key_points_coords[0], left_pupil_coords,
+                self._left_eye_calibration.append(self._distance_ratio(left_key_points_coords[0], left_pupil_coords,
                                                                 left_key_points_coords[0],
                                                                 left_key_points_coords[1]))
             else:
-                self._right_eye_calibration.append(distanceRatio(right_mean_coords[0][1], right_pupil_coords[1],
+                self._right_eye_calibration.append(self._distance_ratio(right_mean_coords[0][1], right_pupil_coords[1],
                                                                  right_mean_coords[0][1],
                                                                  right_mean_coords[1][1]))
-                self._left_eye_calibration.append(distanceRatio(left_mean_coords[0][1], left_pupil_coords[1],
+                self._left_eye_calibration.append(self._distance_ratio(left_mean_coords[0][1], left_pupil_coords[1],
                                                                 left_mean_coords[0][1],
                                                                 left_mean_coords[1][1]))
             self._calibration_cnt += 1
@@ -507,7 +520,7 @@ class GazeController:
             self._left_eye_calibration.clear()
             self._reference_face_3d_coords.clear()
 
-        # Return calculation data as a dictionary object
+        # Return calculation data as dictionary object
         return {
             "frame": frame,
             "is_face": is_face,
