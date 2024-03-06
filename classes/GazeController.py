@@ -148,8 +148,8 @@ class GazeController:
         self._frame_counter = 0
         self._calibration_cnt = 0
         self._is_calibrated = False
-        self._left_eye_calibration = []
-        self._right_eye_calibration = []
+        self._eye_calibration = []
+        self._eye_calibration = []
         self._reference_face_3d_coords = []
         self._current_center = None
         self._zoom = 1.0
@@ -161,8 +161,8 @@ class GazeController:
         self._frame_counter = 0
         self._calibration_cnt = 0
         self._is_calibrated = False
-        self._left_eye_calibration = []
-        self._right_eye_calibration = []
+        self._eye_calibration = []
+        self._eye_calibration = []
         self._reference_face_3d_coords = []
         self._current_center = None
         self._zoom = 1.0
@@ -192,10 +192,6 @@ class GazeController:
         temp2 = np.subtract(point3, point4)
         d1 = np.sqrt(np.dot(np.transpose(temp1), temp1))
         d2 = np.sqrt(np.dot(np.transpose(temp2), temp2))
-        if d2 == 0:
-            d2 = 0.001
-        if d2 == np.nan:
-            print("what, why")
         return d1 / d2
 
     # Landmark detection function
@@ -286,8 +282,9 @@ class GazeController:
         return ratio
 
     # Gaze detection. Works only if calibrated.
-    # Returns gaze direction as a number:
-    #
+    # Returns tuple consisting of gaze direction as a number:
+    # 1-left, 2-right, 3-up, 4-down, 5-center.
+    # Tuple also contains left-right mean distance and up-down mean distance
     def _gaze_detection(self, right_key_points_coords, left_key_points_coords, right_mean_coords, left_mean_coords,
                         right_pupil_coords, left_pupil_coords):
         gaze_direction = 5
@@ -295,75 +292,90 @@ class GazeController:
         right_distance = self._distance_ratio(right_mean_coords[0][1], right_pupil_coords[1],
                                               right_mean_coords[0][1],
                                               right_mean_coords[1][1])
-        if right_distance >= self._right_eye_calibration[2]:
-            eye_position = 'UP'
-            color = [utils.GRAY, utils.YELLOW]
-        elif right_distance <= self._right_eye_calibration[3]:
-            eye_position = "DOWN"
-            color = [utils.BLACK, utils.GREEN]
-        else:
-            eye_position = 'CENTER'
-            color = [utils.YELLOW, utils.PINK]
-        # utils.colorBackgroundText(frame, f'R: {round(right_distance, 2)}, {eye_position}',
-        #                           FONTS, 1.0, (40, 380), 2, color[0], color[1], 8, 8)
-
         left_distance = self._distance_ratio(left_mean_coords[0][1], left_pupil_coords[1],
                                              left_mean_coords[0][1],
                                              left_mean_coords[1][1])
-        if left_distance >= self._left_eye_calibration[2]:
-            if eye_position == 'UP':
-                gaze_direction = 3
-            else:
-                eye_position = 'UP'
-            color = [utils.GRAY, utils.YELLOW]
-        elif left_distance <= self._left_eye_calibration[3]:
-            if eye_position == 'DOWN':
-                gaze_direction = 4
-            else:
-                eye_position = "DOWN"
-            color = [utils.BLACK, utils.GREEN]
-        else:
-            eye_position = 'CENTER'
-            color = [utils.YELLOW, utils.PINK]
+        ud_mean_distance = np.mean([right_distance, left_distance])
+        if ud_mean_distance >= self._eye_calibration[2]:
+            gaze_direction = 3
+            # eye_position = 'UP'
+            # color = [utils.GRAY, utils.YELLOW]
+        elif ud_mean_distance <= self._eye_calibration[3]:
+            gaze_direction = 4
+            # eye_position = "DOWN"
+            # color = [utils.BLACK, utils.GREEN]
+        # else:
+            # eye_position = 'CENTER'
+            # color = [utils.YELLOW, utils.PINK]
+        # utils.colorBackgroundText(frame, f'R: {round(right_distance, 2)}, {eye_position}',
+        #                           FONTS, 1.0, (40, 380), 2, color[0], color[1], 8, 8)
         # utils.colorBackgroundText(frame, f'L: {round(left_distance, 2)}, {eye_position}',
         #                           FONTS, 1.0, (40, 440), 2, color[0], color[1], 8, 8)
 
         right_distance = self._distance_ratio(right_key_points_coords[1], right_pupil_coords,
                                               right_key_points_coords[1],
                                               right_key_points_coords[0])
-        if right_distance >= self._right_eye_calibration[0]:
-            eye_position = 'LEFT'
-            color = [utils.GRAY, utils.YELLOW]
-        elif right_distance <= self._right_eye_calibration[1]:
-            eye_position = "RIGHT"
-            color = [utils.BLACK, utils.GREEN]
-        else:
-            eye_position = 'CENTER'
-            color = [utils.YELLOW, utils.PINK]
+        left_distance = self._distance_ratio(left_key_points_coords[1], left_pupil_coords,
+                                             left_key_points_coords[1],
+                                             left_key_points_coords[0])
+        lr_mean_distance = np.mean([right_distance, left_distance])
+        if lr_mean_distance >= self._eye_calibration[0]:
+            gaze_direction = 1
+            # eye_position = 'LEFT'
+            # color = [utils.GRAY, utils.YELLOW]
+        elif lr_mean_distance <= self._eye_calibration[1]:
+            gaze_direction = 2
+            # eye_position = "RIGHT"
+            # color = [utils.BLACK, utils.GREEN]
+        # else:
+        #     eye_position = 'CENTER'
+        #     color = [utils.YELLOW, utils.PINK]
         # utils.colorBackgroundText(frame, f'R: {round(right_distance, 2)}, {eye_position}',
         #                           FONTS, 1.0, (40, 220), 2, color[0], color[1], 8, 8)
-
-        left_distance = self._distance_ratio(left_key_points_coords[0], left_pupil_coords,
-                                             left_key_points_coords[0],
-                                             left_key_points_coords[1])
-        if left_distance <= self._left_eye_calibration[0]:
-            if eye_position == 'LEFT':
-                gaze_direction = 1
-            else:
-                eye_position = 'LEFT'
-            color = [utils.GRAY, utils.YELLOW]
-        elif left_distance >= self._left_eye_calibration[1]:
-            if eye_position == 'RIGHT':
-                gaze_direction = 2
-            else:
-                eye_position = "RIGHT"
-            color = [utils.BLACK, utils.GREEN]
-        else:
-            eye_position = 'CENTER'
-            color = [utils.YELLOW, utils.PINK]
         # utils.colorBackgroundText(frame, f'L: {round(left_distance, 2)}, {eye_position}',
         #                           FONTS, 1.0, (40, 280), 2, color[0], color[1], 8, 8)
-        return gaze_direction
+
+        return gaze_direction, lr_mean_distance, ud_mean_distance
+
+    # Draws a moving point on frame for user feedback.
+    # Works only after calibration
+    def _moving_point_feedback(self, frame, lr_value, ud_value):
+        left_square_edge_value = self._eye_calibration[0]
+        right_square_edge_value = self._eye_calibration[1]
+        up_square_edge_value = self._eye_calibration[2]
+        down_square_edge_value = self._eye_calibration[3]
+        if left_square_edge_value < right_square_edge_value:
+            left_square_edge_value, right_square_edge_value = right_square_edge_value, left_square_edge_value
+        if up_square_edge_value < down_square_edge_value:
+            up_square_edge_value, down_square_edge_value = down_square_edge_value, up_square_edge_value
+
+        left_right_distance_value = left_square_edge_value - right_square_edge_value
+        up_down_distance_value = up_square_edge_value - down_square_edge_value
+
+        left_frame_edge_value = left_square_edge_value + left_right_distance_value
+        right_frame_edge_value = right_square_edge_value - left_right_distance_value
+        up_frame_edge_value = up_square_edge_value + up_down_distance_value
+        down_frame_edge_value = down_square_edge_value - up_down_distance_value
+
+        frame_height, frame_width = frame.shape[:2]
+        moving_point_coordinates = [0, 0]
+        moving_point_coordinates[0] = int((1 - ((lr_value - right_frame_edge_value) /
+                                                (left_frame_edge_value - right_frame_edge_value))) * frame_width)
+        moving_point_coordinates[1] = int((1 - ((ud_value - down_frame_edge_value) /
+                                                (up_frame_edge_value - down_frame_edge_value))) * frame_height)
+        cv.circle(frame, moving_point_coordinates, 8, utils.ORANGE, thickness=-1)
+
+        square_coordinates = np.zeros((4, 2), dtype=np.int32)
+        square_coordinates[0][0] = int(1/3 * frame_width)
+        square_coordinates[0][1] = int(1/3 * frame_height)
+        square_coordinates[1][0] = int(2/3 * frame_width)
+        square_coordinates[1][1] = square_coordinates[0][1]
+        square_coordinates[2][0] = square_coordinates[1][0]
+        square_coordinates[2][1] = int(2/3 * frame_height)
+        square_coordinates[3][0] = square_coordinates[0][0]
+        square_coordinates[3][1] = square_coordinates[2][1]
+        return cv.polylines(frame, [square_coordinates], True, utils.GRAY, 1,
+                            cv.LINE_AA)
 
     # Main calculation function, detects gaze direction
     def calculate(self, frame, do_calibration = False, reset_calibration = False):
@@ -433,7 +445,7 @@ class GazeController:
             cv.circle(frame, left_pupil_coords, 1, utils.GREEN)
 
             right_mean_coords = np.asarray([np.mean([mesh_2d_coords[p] for p in [2, 94]], axis=0),
-                                            np.mean([mesh_2d_coords[p] for p in [168, 6]], axis=0)],
+                                           np.mean([mesh_2d_coords[p] for p in [168, 6]], axis=0)],
                                            dtype=np.int16)
             left_mean_coords = right_mean_coords
             for i in left_mean_coords:
@@ -477,8 +489,9 @@ class GazeController:
                 #     mesh_3d_coords = np.asarray([np.dot(R, p) for p in mesh_3d_coords],dtype=int)
                 #     [cv.circle(frame, p[:2], 2, (0, 255, 0), -1) for p in mesh_3d_coords]
 
-                gaze_direction = self._gaze_detection(right_key_points_coords, left_key_points_coords, right_mean_coords, left_mean_coords,
-                                                      right_pupil_coords, left_pupil_coords)
+                gaze_direction, lr_mean_distance, ud_mean_distance = self._gaze_detection(right_key_points_coords, left_key_points_coords, right_mean_coords, left_mean_coords,
+                                                                                          right_pupil_coords, left_pupil_coords)
+                frame = self._moving_point_feedback(frame, lr_mean_distance, ud_mean_distance)
 
 
         # Calculating frames per seconds FPS
@@ -497,27 +510,29 @@ class GazeController:
             # if self._calibration_cnt == 0:
             #     reference_face_3d_coords = mesh_3d_coords[:468]
             if self._calibration_cnt < 2:
-                self._right_eye_calibration.append(self._distance_ratio(right_key_points_coords[1], right_pupil_coords,
-                                                   right_key_points_coords[1],
-                                                   right_key_points_coords[0]))
-                self._left_eye_calibration.append(self._distance_ratio(left_key_points_coords[0], left_pupil_coords,
-                                                                left_key_points_coords[0],
-                                                                left_key_points_coords[1]))
+                right_distance = self._distance_ratio(right_key_points_coords[1], right_pupil_coords,
+                                                      right_key_points_coords[1],
+                                                      right_key_points_coords[0])
+                left_distance = self._distance_ratio(left_key_points_coords[1], left_pupil_coords,
+                                                     left_key_points_coords[1],
+                                                     left_key_points_coords[0])
+                self._eye_calibration.append(np.mean([right_distance, left_distance]))
             else:
-                self._right_eye_calibration.append(self._distance_ratio(right_mean_coords[0][1], right_pupil_coords[1],
-                                                                 right_mean_coords[0][1],
-                                                                 right_mean_coords[1][1]))
-                self._left_eye_calibration.append(self._distance_ratio(left_mean_coords[0][1], left_pupil_coords[1],
-                                                                left_mean_coords[0][1],
-                                                                left_mean_coords[1][1]))
+                right_distance = self._distance_ratio(right_mean_coords[0][1], right_pupil_coords[1],
+                                                      right_mean_coords[0][1],
+                                                      right_mean_coords[1][1])
+                left_distance = self._distance_ratio(left_mean_coords[0][1], left_pupil_coords[1],
+                                                     left_mean_coords[0][1],
+                                                     left_mean_coords[1][1])
+
+                self._eye_calibration.append(np.mean([right_distance, left_distance]))
             self._calibration_cnt += 1
             if self._calibration_cnt >= 4:
                 self._is_calibrated = True
         if reset_calibration:
             self._is_calibrated = False
             self._calibration_cnt = 0
-            self._right_eye_calibration.clear()
-            self._left_eye_calibration.clear()
+            self._eye_calibration.clear()
             self._reference_face_3d_coords.clear()
 
         # Return calculation data as dictionary object

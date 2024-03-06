@@ -24,7 +24,7 @@ while result is not None:
     do_calibration = False
     reset_calibration = False
     utils.colorBackgroundText(result["frame"], f'gaze_direction: {direction[result["gaze_direction"]]}',
-                              FONTS, 1.0, (40, 530), 2, color[0], color[1], 8, 8)
+                              FONTS, 1.0, (250, 680), 2, color[0], color[1], 8, 8)
     cv.imshow('frame', result["frame"])
     # cv.imshow('frame', frame)
     key = cv.waitKey(1)
