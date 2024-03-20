@@ -1,10 +1,11 @@
 import cv2 as cv
 import utils
 import classes.GazeController as GazeController
+import numpy as np
+from enum import Enum
 
 FONTS = cv.FONT_HERSHEY_COMPLEX
 color = [utils.YELLOW, utils.PINK]
-direction = ["NO", "LEFT", "RIGHT", "UP", "DOWN", "CENTER"]
 
 camera = cv.VideoCapture(0)
 gaze_controller = GazeController.GazeController()
@@ -12,20 +13,24 @@ result = 1
 do_calibration = False
 reset_calibration = False
 zoom = 1.0
+moving_point_frame = np.zeros((500, 500, 3), dtype=np.uint8)
 while result is not None:
     ret, frameBeforeFlip = camera.read()  # getting frame from camera
     if not ret:
         break
     #  resizing frame
     frame = cv.flip(frameBeforeFlip, 1)
-    frame = cv.resize(frame, None, fx=1.5, fy=1.5, interpolation=cv.INTER_CUBIC)
-    result = gaze_controller.calculate(frame=frame, do_calibration=do_calibration, reset_calibration=reset_calibration)
+    #frame = cv.resize(frame, None, fx=1.5, fy=1.5, interpolation=cv.INTER_CUBIC)
+    moving_point_frame *= 0
+    result = gaze_controller.calculate(frame=frame, do_calibration=do_calibration, reset_calibration=reset_calibration,
+                                       moving_point_frame=moving_point_frame)
 
     do_calibration = False
     reset_calibration = False
-    utils.colorBackgroundText(result["frame"], f'gaze_direction: {direction[result["gaze_direction"]]}',
-                              FONTS, 1.0, (250, 680), 2, color[0], color[1], 8, 8)
+    utils.colorBackgroundText(result["frame"], f'gaze_direction: {result["gaze_direction"].name}',
+                              FONTS, 0.6, (160, 450), 2, color[0], color[1], 8, 8)
     cv.imshow('frame', result["frame"])
+    cv.imshow('moving_point_frame', moving_point_frame)
     # cv.imshow('frame', frame)
     key = cv.waitKey(1)
     if key == ord('c') or key == ord('C'):
