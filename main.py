@@ -2,7 +2,7 @@ import cv2 as cv
 import utils
 import GazeController as GazeController
 
-
+##################### tak zaznacze zmiany :)
 direction_to_letter = {
     (1, 1, 1): 'a',
     (1, 1, 2): 'b',
@@ -54,13 +54,14 @@ zoom = 1.0
 cv.namedWindow('frame', cv.WND_PROP_FULLSCREEN)
 cv.setWindowProperty('frame', cv.WND_PROP_FULLSCREEN, cv.WINDOW_FULLSCREEN)
 
+################################
 # Inicjalizacja tablicy do przechowywania kierunków patrzenia
 direction_history = []
 previous_direction = 5
 typed_text = ""
 
 
-
+############################## 
 def draw_text_area(frame):
     # Ustawienie parametrów obszaru tekstu
     text_area_height = 50
@@ -99,6 +100,8 @@ while result is not None:
     half_height = height // 2
     half_width = width // 2
 
+
+    ################################ tutaj kropki przy kalibracji
     calibration_cnt = result["calibration_cnt"]
     if calibration_cnt == 0:
         cv.circle(result["frame"], (10, half_height), 5, (0, 255, 0), -1)  # Kropka na lewo
@@ -110,7 +113,8 @@ while result is not None:
         cv.circle(result["frame"], (half_width, height - 10), 5, (0, 255, 0), -1)  # Kropka na dole
 
 
-
+   #########################a tutaj cala mechanika zapisywania kierunkow do tablicy, porownywanie z zmapowanymi literkami i wpisanie do pola
+    ###kierunki 0 i 5 są pomijane (CENTER i NO)
     # Sprawdzenie czy kierunek patrzenia jest różny od "CENTER"
     if result["gaze_direction"] != 5 and result["gaze_direction"] != 0:
         # Zapisywanie kierunków patrzenia do tablicy (z uwzględnieniem warunku)
@@ -164,6 +168,7 @@ while result is not None:
     if key == ord('2') and zoom > 1.0:
         zoom -= 0.25
         zoom = gaze_controller.change_zoom(zoom)
+    ############################ jak klikniesz z to czysci cale pole tekstu, rpzwoazanie tymczasowe, dla wygody testow    
     if key == ord('z') or key == ord('Z'):
         typed_text = ''
     if key == ord('d') or key == ord('D'):
