@@ -165,6 +165,10 @@ class GazeController:
         self._current_center = None
         self._zoom = 1.0
         self._head_detector_values = []
+        self._lr_mean_values_vector = np.asarray([np.nan, np.nan, np.nan, np.nan, np.nan])
+        self._ud_mean_values_vector = np.asarray([np.nan, np.nan, np.nan, np.nan, np.nan])
+        self._last_lr_mean_value = 0
+        self._last_ud_mean_value = 0
         return
 
     # Reset object state
@@ -178,6 +182,8 @@ class GazeController:
         self._current_center = None
         self._zoom = 1.0
         self._head_detector_values = []
+        self._lr_mean_values_vector[:] = np.nan
+        self._ud_mean_values_vector[:] = np.nan
         return
 
     # Change zoom of cropped image
@@ -295,14 +301,20 @@ class GazeController:
         ratio = (reRatio + leRatio) / 2
         return ratio
 
+    def _head_movement_detector(self, nose_top_edge_distance, nose_bottom_edge_distance):
+        ratio = (self._head_detector_values[0]/nose_top_edge_distance)
+        return ratio
+
     # Gaze detection. Works only if calibrated.
     # Returns tuple consisting of gaze direction as a number:
     # 1-left, 2-right, 3-up, 4-down, 5-center.
     # Tuple also contains left-right mean distance and up-down mean distance
     def _gaze_detection(self, right_eye_lr_key_points_coords, left_eye_lr_key_points_coords,
                         right_eye_ud_key_points_coords, left_eye_ud_key_points_coords,
-                        right_pupil_coords, left_pupil_coords):
+                        right_pupil_coords, left_pupil_coords, nose_top_edge_distance):
         gaze_direction = Direction.NO_DIRECTION
+
+        ratio = self._head_movement_detector(nose_top_edge_distance, nose_top_edge_distance)
 
         right_eye_distance = self._distance_ratio(right_eye_ud_key_points_coords[0][1], right_pupil_coords[1],
                                                   right_eye_ud_key_points_coords[0][1],
@@ -310,7 +322,8 @@ class GazeController:
         left_eye_distance = self._distance_ratio(left_eye_ud_key_points_coords[0][1], left_pupil_coords[1],
                                                  left_eye_ud_key_points_coords[0][1],
                                                  left_eye_ud_key_points_coords[1][1])
-        ud_mean_distance = np.mean([right_eye_distance, left_eye_distance])
+        ud_mean_distance = np.mean([right_eye_distance, left_eye_distance]) * ratio
+
         if ud_mean_distance >= self._eye_calibration[2]:
             gaze_direction = Direction.UP
             # eye_position = 'UP'
@@ -334,6 +347,7 @@ class GazeController:
                                                  left_eye_lr_key_points_coords[1],
                                                  left_eye_lr_key_points_coords[0])
         lr_mean_distance = np.mean([right_eye_distance, left_eye_distance])
+
         if lr_mean_distance >= self._eye_calibration[0]:
             gaze_direction = Direction.LEFT
             # eye_position = 'LEFT'
@@ -349,6 +363,27 @@ class GazeController:
         #                           FONTS, 1.0, (40, 220), 2, color[0], color[1], 8, 8)
         # utils.colorBackgroundText(frame, f'L: {round(left_distance, 2)}, {eye_position}',
         #                           FONTS, 1.0, (40, 280), 2, color[0], color[1], 8, 8)
+
+        self._lr_mean_values_vector = np.roll(self._lr_mean_values_vector, 1)
+        self._lr_mean_values_vector[0] = lr_mean_distance
+        self._ud_mean_values_vector = np.roll(self._ud_mean_values_vector, 1)
+        self._ud_mean_values_vector[0] = ud_mean_distance
+        lr_diff = np.abs(self._last_lr_mean_value - lr_mean_distance)
+        ud_diff = np.abs(self._last_ud_mean_value - ud_mean_distance)
+
+        if lr_diff <= np.abs(self._eye_calibration[0] - self._eye_calibration[1]) / 4:
+            lr_mean_distance = np.nanmean(self._lr_mean_values_vector)
+        else:
+            self._lr_mean_values_vector[1:] = np.nan
+            self._lr_mean_values_vector[0] = lr_mean_distance
+        if ud_diff <= np.abs(self._eye_calibration[2] - self._eye_calibration[3]) / 4:
+            ud_mean_distance = np.nanmean(self._ud_mean_values_vector)
+        else:
+            self._ud_mean_values_vector[1:] = np.nan
+            self._ud_mean_values_vector[0] = ud_mean_distance
+
+        self._last_lr_mean_value = lr_mean_distance
+        self._last_ud_mean_value = ud_mean_distance
 
         return gaze_direction, lr_mean_distance, ud_mean_distance
 
@@ -395,10 +430,6 @@ class GazeController:
                      cv.LINE_AA)
         return cv.polylines(frame, [square_coordinates], True, utils.GRAY, 1,
                             cv.LINE_AA)
-
-    def _head_movement_detector(self, frame, nose_top_edge_distance, nose_bottom_edge_distance):
-        cv.putText(frame, f'head_detector: {nose_top_edge_distance}, {nose_bottom_edge_distance}', (100, 200), FONTS, 0.6, utils.GREEN, 2)
-        return "Uspokuj się wariacie"
 
     # Main calculation function, detects gaze direction
     def calculate(self, frame, do_calibration=False, reset_calibration=False, moving_point_frame=None):
@@ -515,18 +546,20 @@ class GazeController:
                 #     mesh_3d_coords = np.asarray([np.dot(R, p) for p in mesh_3d_coords],dtype=int)
                 #     [cv.circle(frame, p[:2], 2, (0, 255, 0), -1) for p in mesh_3d_coords]
 
+                nose_top_edge_distance = self._distance_ratio(mesh_2d_coords[10], mesh_2d_coords[4],
+                                                              mesh_2d_coords[10], mesh_2d_coords[152])
+                nose_bottom_edge_distance = self._distance_ratio(mesh_2d_coords[152], mesh_2d_coords[4],
+                                                                 mesh_2d_coords[152], mesh_2d_coords[10])
+                cv.putText(frame, f'head_detector: {nose_top_edge_distance}, {nose_bottom_edge_distance}', (100, 200),
+                           FONTS, 0.6, utils.GREEN, 2)
+
                 gaze_direction, lr_mean_distance, ud_mean_distance = self._gaze_detection(right_key_points_coords,
                                                                                           left_key_points_coords,
                                                                                           right_mean_coords,
                                                                                           left_mean_coords,
                                                                                           right_pupil_coords,
-                                                                                          left_pupil_coords)
-
-                nose_top_edge_distance = self._distance_ratio(mesh_2d_coords[10], mesh_2d_coords[4],
-                                                              mesh_2d_coords[10], mesh_2d_coords[152])
-                nose_bottom_edge_distance = self._distance_ratio(mesh_2d_coords[152], mesh_2d_coords[4],
-                                                                 mesh_2d_coords[152], mesh_2d_coords[10])
-                self._head_movement_detector(frame, nose_top_edge_distance, nose_bottom_edge_distance)
+                                                                                          left_pupil_coords,
+                                                                                          nose_top_edge_distance)
 
         if moving_point_frame is not None:
             if lr_mean_distance is not None and ud_mean_distance is not None:
