@@ -29,14 +29,16 @@ LEFT_EYE = [362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385
 LEFT_EYEBROW = [336, 296, 334, 293, 300, 276, 283, 282, 295, 285]
 LEFT_PUPIL_POINT = 468
 LEFT_IRIS = [469, 470, 471, 472]
-LEFT_KEY_POINTS = [362, 263, 9, 8]  # lewo, prawo, góra, dół
+LEFT_LR_KEY_POINTS = [362, 263]  # lewo, prawo
+LEFT_UD_KEY_POINTS = [2, 94, 9, 8]  # 2*dół, 2*góra
 
 # right eyes indices
 RIGHT_EYE = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
 RIGHT_EYEBROW = [70, 63, 105, 66, 107, 55, 65, 52, 53, 46]
 RIGHT_PUPIL_POINT = 473
 RIGHT_IRIS = [474, 475, 476, 477]
-RIGHT_KEY_POINTS = [33, 133, 9, 8]  # lewo, prawo, góra, dół
+RIGHT_LR_KEY_POINTS = [33, 133]  # lewo, prawo
+RIGHT_UD_KEY_POINTS = [2, 94, 9, 8]  # 2*dół, 2*góra
 
 
 # # Eyes Extrctor function,
@@ -139,12 +141,12 @@ RIGHT_KEY_POINTS = [33, 133, 9, 8]  # lewo, prawo, góra, dół
 
 Direction = Enum(
     'Direction',
-    ['NO_DIRECTION',
-     'LEFT',
-     'RIGHT',
-     'UP',
-     'DOWN',
-     'CENTER']
+    [('NO_DIRECTION', 0),
+     ('LEFT', 1),
+     ('RIGHT', 2),
+     ('UP', 3),
+     ('DOWN', 4),
+     ('CENTER', 5)]
 )
 
 
@@ -165,6 +167,8 @@ class GazeController:
         self._current_center = None
         self._zoom = 1.0
         self._head_detector_values = []
+        self._lr_key_point_mean_values_vector = np.asarray([np.nan, np.nan, np.nan, np.nan, np.nan])
+        self._ud_key_point_mean_values_vector = np.asarray([np.nan, np.nan, np.nan, np.nan, np.nan])
         self._lr_mean_values_vector = np.asarray([np.nan, np.nan, np.nan, np.nan, np.nan])
         self._ud_mean_values_vector = np.asarray([np.nan, np.nan, np.nan, np.nan, np.nan])
         self._last_lr_mean_value = 0
@@ -182,6 +186,8 @@ class GazeController:
         self._current_center = None
         self._zoom = 1.0
         self._head_detector_values = []
+        self._lr_key_point_mean_values_vector[:] = np.nan
+        self._ud_key_point_mean_values_vector[:] = np.nan
         self._lr_mean_values_vector[:] = np.nan
         self._ud_mean_values_vector[:] = np.nan
         return
@@ -322,7 +328,7 @@ class GazeController:
         left_eye_distance = self._distance_ratio(left_eye_ud_key_points_coords[0][1], left_pupil_coords[1],
                                                  left_eye_ud_key_points_coords[0][1],
                                                  left_eye_ud_key_points_coords[1][1])
-        ud_mean_distance = np.mean([right_eye_distance, left_eye_distance]) * ratio
+        ud_mean_distance = ratio * np.mean([right_eye_distance, left_eye_distance])
 
         if ud_mean_distance >= self._eye_calibration[2]:
             gaze_direction = Direction.UP
@@ -501,17 +507,19 @@ class GazeController:
             cv.circle(frame, right_pupil_coords, 1, utils.GREEN)
             cv.circle(frame, left_pupil_coords, 1, utils.GREEN)
 
-            right_mean_coords = np.asarray([np.mean([mesh_2d_coords[p] for p in [2, 94]], axis=0),
-                                           np.mean([mesh_2d_coords[p] for p in [168, 6]], axis=0)],
-                                           dtype=np.int16)
-            left_mean_coords = right_mean_coords
-            for i in left_mean_coords:
+            right_ud_key_points_coords = np.asarray([np.mean([mesh_2d_coords[p] for p in RIGHT_UD_KEY_POINTS[:2]], axis=0),
+                                                    np.mean([mesh_2d_coords[p] for p in RIGHT_UD_KEY_POINTS[2:]], axis=0)],
+                                                    dtype=np.int16)
+            left_ud_key_points_coords = np.asarray([np.mean([mesh_2d_coords[p] for p in LEFT_UD_KEY_POINTS[:2]], axis=0),
+                                          np.mean([mesh_2d_coords[p] for p in LEFT_UD_KEY_POINTS[2:]], axis=0)],
+                                          dtype=np.int16)
+            for i in left_ud_key_points_coords:
                 cv.circle(frame, i, 5, utils.RED)
-            for i in right_mean_coords:
+            for i in right_ud_key_points_coords:
                 cv.circle(frame, i, 5, utils.RED)
 
-            right_key_points_coords = [mesh_2d_coords[p] for p in RIGHT_KEY_POINTS]
-            left_key_points_coords = [mesh_2d_coords[p] for p in LEFT_KEY_POINTS]
+            right_lr_key_points_coords = [mesh_2d_coords[p] for p in RIGHT_LR_KEY_POINTS]
+            left_lr_key_points_coords = [mesh_2d_coords[p] for p in LEFT_LR_KEY_POINTS]
 
             # Detecting gaze direction if calibrated
             if self._is_calibrated and not are_closed and not reset_calibration:
@@ -553,10 +561,10 @@ class GazeController:
                 cv.putText(frame, f'head_detector: {nose_top_edge_distance}, {nose_bottom_edge_distance}', (100, 200),
                            FONTS, 0.6, utils.GREEN, 2)
 
-                gaze_direction, lr_mean_distance, ud_mean_distance = self._gaze_detection(right_key_points_coords,
-                                                                                          left_key_points_coords,
-                                                                                          right_mean_coords,
-                                                                                          left_mean_coords,
+                gaze_direction, lr_mean_distance, ud_mean_distance = self._gaze_detection(right_lr_key_points_coords,
+                                                                                          left_lr_key_points_coords,
+                                                                                          right_ud_key_points_coords,
+                                                                                          left_ud_key_points_coords,
                                                                                           right_pupil_coords,
                                                                                           left_pupil_coords,
                                                                                           nose_top_edge_distance)
@@ -589,20 +597,20 @@ class GazeController:
                 self._head_detector_values = [nose_top_edge_distance, nose_bottom_edge_distance]
                 # reference_face_3d_coords = mesh_3d_coords[:468]
             if self._calibration_cnt < 2:
-                right_distance = self._distance_ratio(right_key_points_coords[1], right_pupil_coords,
-                                                      right_key_points_coords[1],
-                                                      right_key_points_coords[0])
-                left_distance = self._distance_ratio(left_key_points_coords[1], left_pupil_coords,
-                                                     left_key_points_coords[1],
-                                                     left_key_points_coords[0])
+                right_distance = self._distance_ratio(right_lr_key_points_coords[1], right_pupil_coords,
+                                                      right_lr_key_points_coords[1],
+                                                      right_lr_key_points_coords[0])
+                left_distance = self._distance_ratio(left_lr_key_points_coords[1], left_pupil_coords,
+                                                     left_lr_key_points_coords[1],
+                                                     left_lr_key_points_coords[0])
                 self._eye_calibration.append(np.mean([right_distance, left_distance]))
             else:
-                right_distance = self._distance_ratio(right_mean_coords[0][1], right_pupil_coords[1],
-                                                      right_mean_coords[0][1],
-                                                      right_mean_coords[1][1])
-                left_distance = self._distance_ratio(left_mean_coords[0][1], left_pupil_coords[1],
-                                                     left_mean_coords[0][1],
-                                                     left_mean_coords[1][1])
+                right_distance = self._distance_ratio(right_ud_key_points_coords[0][1], right_pupil_coords[1],
+                                                      right_ud_key_points_coords[0][1],
+                                                      right_ud_key_points_coords[1][1])
+                left_distance = self._distance_ratio(left_ud_key_points_coords[0][1], left_pupil_coords[1],
+                                                     left_ud_key_points_coords[0][1],
+                                                     left_ud_key_points_coords[1][1])
 
                 self._eye_calibration.append(np.mean([right_distance, left_distance]))
             self._calibration_cnt += 1
